@@ -1,18 +1,20 @@
 import React, { Component } from 'react';
 import client from './feathers';
-import {Rating,Progress,Card,Form,Container,Label, Modal, Icon,Button,Divider} from 'semantic-ui-react'
+import {List,Input,Image,Rating,Progress,Card,Form,Container,Label, Modal, Icon,Button,Divider} from 'semantic-ui-react'
 import './App.css';
 let vremenska_linija
-
+let searchLunar
+var searchValCache =""
 class App extends Component {
   constructor(props) {
     super(props);
     this.state = {
-      notes: [],
+      storageSearchResult: [],
+      favs: [],
       modalLogin: true,
       appActive: true,
       status: [],
-      feeds: [],
+      nextsong: [],
       currentsongStopWords: [],
       currentsong: [],
       watchwords: [],
@@ -30,8 +32,11 @@ class App extends Component {
       newFeedCount:0,
       newFeedCountAppend:false,
       loadingFeeds:false,
+      loading:false,
       selectedId:'',
+      storageSearchResultTotal:'',
       selectedIdScroll:'',
+      favTotal:'',
     };
 
 
@@ -40,6 +45,9 @@ class App extends Component {
     this.rating = this.rating.bind(this);
     this.trackProgress = this.trackProgress.bind(this);
     this.trackElapsedLoop = this.trackElapsedLoop.bind(this);
+    this.searchKeyUp = this.searchKeyUp.bind(this);
+    this.runMe = this.runMe.bind(this);
+    this.getStatus = this.getStatus.bind(this);
   }
 
   componentDidMount() {
@@ -47,6 +55,7 @@ Promise.all([client.authenticate()]).then(([auth]) => {
 
 
 
+  this.getStatus()
 
 
       }).catch(error => {console.log(error)})
@@ -78,6 +87,32 @@ Promise.all([client.authenticate()]).then(([auth]) => {
       }
     }
 
+
+
+    client.service('played').on('created', currentsong => {
+      console.log("currentsong",currentsong);
+      client.service('play').find({
+        query: {
+          command:'status'
+        }
+        }).then((notes) => {
+          this.setState({status:notes.status})
+          this.setState({currentsong:notes.currentsong})
+          this.setState({nextsong:notes.nextsong})
+          this.trackProgress()
+      });
+
+    });
+
+
+  }
+
+
+  handleLoginClose = () => this.setState({ modalLogin: false })
+  handleLoginOpen = () => this.setState({ modalLogin: true })
+  handleLoginChange = (e, { name, value }) => this.setState({ [name]: value })
+
+  getStatus(){
     client.service('play').find({
       query: {
         command:'status'
@@ -94,31 +129,38 @@ Promise.all([client.authenticate()]).then(([auth]) => {
         // // let unique = [...new Set(notes.data.map(item => item.word))];
         this.setState({status:notes.status})
         this.setState({currentsong:notes.currentsong})
+        this.setState({nextsong:notes.nextsong})
+
         this.trackProgress()
+        this.getFavs()
     });
-
-    client.service('played').on('created', currentsong => {
-      console.log("currentsong",currentsong);
-      client.service('play').find({
-        query: {
-          command:'status'
-        }
-        }).then((notes) => {
-          this.setState({status:notes.status})
-          this.setState({currentsong:notes.currentsong})
-          this.trackProgress()
-      });
-
-    });
-
-
   }
-
-
-  handleLoginClose = () => this.setState({ modalLogin: false })
-  handleLoginOpen = () => this.setState({ modalLogin: true })
-  handleLoginChange = (e, { name, value }) => this.setState({ [name]: value })
-
+  getFavs(){
+    client.service('favorite').find({
+      query: {
+        $limit: 500,
+        $sort: {
+          updatedAt: -1
+        },
+      }
+      }).then((notes) => {
+        // let uniq = []
+        // let currentsongData = []
+        // for (var i = 0; i < notes.data.length; i++) {
+        //   if (uniq.indexOf(notes.data[i].word) === -1) {
+        //     uniq.push(notes.data[i].word)
+        //     currentsongData.push(notes.data[i])
+        //   }
+        // }
+        // // let unique = [...new Set(notes.data.map(item => item.word))];
+        // this.setState({status:notes.status})
+        // this.setState({currentsong:notes.currentsong})
+        this.setState({favs:notes.data})
+        this.setState({favTotal:notes.total})
+        console.log(notes);
+        // this.trackProgress()
+    });
+  }
   handleLoginSubmit() {
     const { email,password } = this.state
     console.log(email,password);
@@ -143,12 +185,18 @@ Promise.all([client.authenticate()]).then(([auth]) => {
     if (command==='random') {
       let status = this.state.status.random
       query = {command:command,state:status==='1'?0:1}
+    }else if (command==='playNext') {
+      let path=event.currentTarget.dataset.path
+      query = {command:command,path:path}
     }
+    // console.log(event.currentTarget.dataset);
+
     client.service('play').find({
       query: query
       }).then((notes) => {
         console.log("notes");
         console.log(notes);
+        this.getStatus()
         // let uniq = []
         // let currentsongData = []
         // for (var i = 0; i < notes.data.length; i++) {
@@ -158,12 +206,15 @@ Promise.all([client.authenticate()]).then(([auth]) => {
         //   }
         // }
         // // let unique = [...new Set(notes.data.map(item => item.word))];
-        if (notes.currentsong) {
-          this.setState({currentsong:notes.currentsong})
-        }
-        if (notes.status) {
-          this.setState({status:notes.status})
-        }
+        // if (notes.currentsong) {
+        //   this.setState({currentsong:notes.currentsong})
+        // }
+        // if (notes.status) {
+        //   this.setState({status:notes.status})
+        // }
+        // if (notes.nextsong) {
+        //   this.setState({nextsong:notes.nextsong})
+        // }
     });
    }
 rating(event,data){
@@ -230,6 +281,80 @@ rating(event,data){
    }.bind(this), trackOnePercent * 1000)
 }
 
+runMe(searchQuery) {
+  console.log(searchQuery);
+  Promise.all([
+    client.service('storage').find({
+      query:{
+      $search: searchQuery,
+      $limit: 500,
+      $sort: {
+        updatedAt: -1
+      },
+    }})
+  ]).then(([lunrSearchResponse]) => {
+    clearTimeout(searchLunar)
+    searchLunar = setTimeout(function(event) {
+      console.log("lunrSearchResponse",lunrSearchResponse);
+      this.setState({loading: false,storageSearchResult:lunrSearchResponse.data,storageSearchResultTotal:lunrSearchResponse.total})
+      // localStorage.lunarData = JSON.stringify(lunrSearchResponse)
+      // this.getMetaForLunar(lunrSearchResponse)
+    }.bind(this), 500)
+  })
+  console.log("run");
+}
+
+searchKeyUp(event) {
+
+
+  clearTimeout(searchLunar)
+  let searchQuery = "kidor*";
+  if (event) {
+    searchQuery = event.currentTarget.value;
+  } else {
+    searchQuery = this.state.searchQuery
+  }
+
+  // console.log(searchValCache, searchQuery);
+  if (searchQuery.length >= 3) {
+
+    if (searchQuery !== searchValCache) {
+      if (!this.state.loading) {
+        this.setState({
+          loading: true,
+          queue: [],
+          movingTrough: 'search'
+        })
+      }
+      searchLunar = setTimeout(function(event) {
+        this.runMe(searchQuery)
+      }.bind(this), 500)
+      searchValCache = searchQuery
+    }
+    else {
+      if (this.state.loading) {
+        clearTimeout(searchLunar)
+        this.setState({
+          loading: false,
+          // queue: []
+        })
+      }
+    }
+  } else {
+    console.log(this.state.loading);
+    if (this.state.loading) {
+      clearTimeout(searchLunar)
+      this.setState({
+        loading: false
+      })
+    }
+    // if (searchQuery.length===0 ) {
+    //   this.queueShow(this.state.queueSkip)
+    //   this.interactWithSearch('searchValueEmpty')
+    // }
+  }
+}
+
 render() {
     // console.log(this.state);
     // <Menu
@@ -284,6 +409,7 @@ render() {
 
 
       <Container text>
+
       <Card fluid={true} className="disable_select">
         <Card.Content extra>
           <a onClick={this.next} data-command="previous">
@@ -302,16 +428,12 @@ render() {
           </a>
           &nbsp;
           <Divider/>
-          <a onClick={this.next} data-command="random">
-            <Icon name='random' color={this.state.status.random==='1'?'red':'green'}/>
-             random
-          </a>
+
         </Card.Content>
         <Progress percent={this.state.curentTrackPercentage}  indicating/>
       </Card>
 
-
-      <Card fluid={true}>
+      <Card fluid={true} className={'np'} >
         <Card.Content>
           <Card.Header>
             {this.state.currentsong.Artist}
@@ -320,6 +442,7 @@ render() {
             <span className='date'>
             <Icon name='time' />   {Math.round(this.state.currentsong.Time/60)} min.
             </span>
+            <Image style={{borderRadius:'10px'}} src={'http://x.me:3031/images?file='+this.state.currentsong.file} size='medium' floated={'right'}  />
           </Card.Meta>
           <Card.Description>
           {this.state.currentsong.Title} <Rating rating={this.state.currentsong.favorite} onRate={this.rating}/>
@@ -331,15 +454,65 @@ render() {
         <Label><Icon name='tag' /> {this.state.currentsong.Genre}</Label>
         <p/>
         <Label><Icon name='file' /> {this.state.currentsong.file}</Label>
+        <p/>
+        <Label><Icon name='tag' /> {this.state.currentsong.Comment}</Label>
           </Card.Description>
         </Card.Content>
         <Card.Content extra>
-          <a>
+
+       <a onClick={this.next} data-command="random">
+         <Icon name='random' color={this.state.status.random==='1'?'red':'green'}/>
+          random
+       </a>
+
+         &nbsp;
+          <a onClick={this.next} data-command="next">
             <Icon name='play' />
-             played 22 times.
+            {this.state.nextsong.Artist} - {this.state.nextsong.Title}
+
           </a>
         </Card.Content>
       </Card>
+
+      <Card fluid={true}  >
+        <Card.Content extra>
+
+        <span>{this.state.favTotal?<Icon name='play' />:''}  {this.state.favTotal} </span>
+        </Card.Content>
+
+        <List ordered className={'queueShow1'}>
+        {this.state.favs.map( (row1, index1) => (
+
+          <List.Item key={index1}  >
+          <Image className="disable_select" onClick={this.next} data-command="playNext" data-path={row1.file} src={'http://x.me:3031/images?file='+row1.file} avatar={true}  />
+          &nbsp; {row1.Artist} - {row1.Title} <small>{row1.file} </small>
+          </List.Item>
+
+        ))}
+        </List>
+
+      </Card>
+
+      <Card fluid={true}  >
+        <Card.Content extra>
+
+<Input loading={this.state.loading?true:false} icon='search' fluid inverted placeholder={this.state.searchPlaceholder} ref={(input) => { this.textInput = input; }} onKeyUp={this.searchKeyUp}/>
+<span>{this.state.storageSearchResultTotal?<Icon name='play' />:''}  {this.state.storageSearchResultTotal} </span>
+        </Card.Content>
+
+        <List ordered className={'queueShow1'}>
+        {this.state.storageSearchResult.map( (row1, index1) => (
+
+          <List.Item key={index1}  >
+          <Image className="disable_select" onClick={this.next} data-command="playNext" data-path={row1.file} src={'http://x.me:3031/images?file='+row1.file} avatar={true}  />
+          &nbsp; {row1.Artist} - {row1.Title} <small>{row1.file} </small>
+          </List.Item>
+
+        ))}
+        </List>
+
+      </Card>
+
 
 
 
