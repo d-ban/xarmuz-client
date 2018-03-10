@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
 import client from './feathers';
-import {Loader,List,Input,Image,Rating,Progress,Card,Form,Container,Label, Modal, Icon,Button,Divider} from 'semantic-ui-react'
+import {Dropdown,Loader,List,Input,Image,Rating,Progress,Card,Form,Container,Label, Modal, Icon,Button,Divider} from 'semantic-ui-react'
 import './App.css';
 let vremenska_linija
 let searchLunar
@@ -49,6 +49,7 @@ class App extends Component {
     this.runMe = this.runMe.bind(this);
     this.getStatus = this.getStatus.bind(this);
     this.getFavs = this.getFavs.bind(this);
+    this.handleChange = this.handleChange.bind(this);
   }
 
   componentDidMount() {
@@ -75,13 +76,14 @@ Promise.all([client.authenticate()]).then(([auth]) => {
         if (!this.state.appActive){
         console.log("setState focus",this.state.appActive);
         this.setState({appActive:true})
+          this.getStatus()
         // this.weHaveFocus()
       }
       } else {
         // console.log("focus lost");
         if (this.state.appActive){
           this.setState({appActive:false})
-          document.title = "Noter zzZZZZZ";
+          document.title = "Hey, come back!";
           console.log("setState lost focus",this.state.appActive);
         }
 
@@ -97,10 +99,7 @@ Promise.all([client.authenticate()]).then(([auth]) => {
           command:'status'
         }
         }).then((notes) => {
-          this.setState({status:notes.status})
-          this.setState({currentsong:notes.currentsong})
-          this.setState({nextsong:notes.nextsong})
-          this.trackProgress()
+         this.getStatus()
       });
 
     });
@@ -144,7 +143,7 @@ Promise.all([client.authenticate()]).then(([auth]) => {
         this.setState({status:notes.status})
         this.setState({currentsong:notes.currentsong})
         this.setState({nextsong:notes.nextsong})
-
+        document.title = notes.currentsong.Title;
         this.trackProgress()
         // this.getFavs()
     });
@@ -153,7 +152,7 @@ Promise.all([client.authenticate()]).then(([auth]) => {
     this.setState({loading:true})
     client.service('favorite').find({
       query: {
-        // $limit: 10,
+        $limit: 20,
         $sort: {
           playCount: -1
         },
@@ -373,9 +372,39 @@ searchKeyUp(event) {
   }
 }
 
+changeVol(value){
+    console.log(value);
+    client.service('play').find({
+      query: {
+        command:'vol',
+        state:value
+      }
+      }).then((notes) => {
+        console.log("notes");
+        console.log(notes);
+    });
+    let status = this.state.status
+    status.volume= value
+    this.setState({
+      status: status,
+      // queue: []
+    })
+}
+handleChange = (e, { value }) => this.changeVol(value)
+
+
 render() {
   const loaderIcon = <Loader size="mini" active inline/>
-
+  const stateOptions = [
+    { key: '20', value: '30', text: '30' },
+    { key: '40', value: '40', text: '40' },
+    { key: '50', value: '50', text: '50' },
+    { key: '60', value: '60', text: '60' },
+    { key: '70', value: '70', text: '70' },
+    { key: '80', value: '80', text: '80' },
+    { key: '90', value: '90', text: '90' },
+    { key: '100', value: '100', text: '100' },
+  ]
     // console.log(this.state);
     // <Menu
     // size='small'
@@ -447,6 +476,8 @@ render() {
              next
           </a>
           &nbsp;
+          <Dropdown value={this.state.status.volume} onChange={this.handleChange} compact placeholder='Vol' search selection basic options={stateOptions} />
+
           <Divider/>
 
         </Card.Content>
