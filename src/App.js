@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
 import client from './feathers';
-import {List,Input,Image,Rating,Progress,Card,Form,Container,Label, Modal, Icon,Button,Divider} from 'semantic-ui-react'
+import {Loader,List,Input,Image,Rating,Progress,Card,Form,Container,Label, Modal, Icon,Button,Divider} from 'semantic-ui-react'
 import './App.css';
 let vremenska_linija
 let searchLunar
@@ -48,6 +48,7 @@ class App extends Component {
     this.searchKeyUp = this.searchKeyUp.bind(this);
     this.runMe = this.runMe.bind(this);
     this.getStatus = this.getStatus.bind(this);
+    this.getFavs = this.getFavs.bind(this);
   }
 
   componentDidMount() {
@@ -103,6 +104,19 @@ Promise.all([client.authenticate()]).then(([auth]) => {
       });
 
     });
+    client.service('favorite').on('created', favs => {
+      this.getFavs()
+
+    });
+
+    client.service('favorite').on('removed', favs => {
+      this.getFavs()
+
+    });
+    client.service('favorite').on('patched', favs => {
+      this.getFavs()
+
+    });
 
 
   }
@@ -132,15 +146,16 @@ Promise.all([client.authenticate()]).then(([auth]) => {
         this.setState({nextsong:notes.nextsong})
 
         this.trackProgress()
-        this.getFavs()
+        // this.getFavs()
     });
   }
   getFavs(){
+    this.setState({loading:true})
     client.service('favorite').find({
       query: {
-        $limit: 500,
+        // $limit: 10,
         $sort: {
-          updatedAt: -1
+          playCount: -1
         },
       }
       }).then((notes) => {
@@ -155,8 +170,8 @@ Promise.all([client.authenticate()]).then(([auth]) => {
         // // let unique = [...new Set(notes.data.map(item => item.word))];
         // this.setState({status:notes.status})
         // this.setState({currentsong:notes.currentsong})
-        this.setState({favs:notes.data})
-        this.setState({favTotal:notes.total})
+        this.setState({storageSearchResult:notes.data,loading:false})
+        this.setState({storageSearchResultTotal:notes.total})
         console.log(notes);
         // this.trackProgress()
     });
@@ -314,6 +329,9 @@ searchKeyUp(event) {
   } else {
     searchQuery = this.state.searchQuery
   }
+  this.setState({
+    searchQuery: searchQuery
+  })
 
   // console.log(searchValCache, searchQuery);
   if (searchQuery.length >= 3) {
@@ -356,6 +374,8 @@ searchKeyUp(event) {
 }
 
 render() {
+  const loaderIcon = <Loader size="mini" active inline/>
+
     // console.log(this.state);
     // <Menu
     // size='small'
@@ -408,7 +428,7 @@ render() {
 
 
 
-      <Container text>
+      <Container >
 
       <Card fluid={true} className="disable_select">
         <Card.Content extra>
@@ -433,7 +453,7 @@ render() {
         <Progress percent={this.state.curentTrackPercentage}  indicating/>
       </Card>
 
-      <Card fluid={true} className={'np'} >
+      <Card fluid={true} className={''} >
         <Card.Content>
           <Card.Header>
             {this.state.currentsong.Artist}
@@ -474,33 +494,20 @@ render() {
         </Card.Content>
       </Card>
 
-      <Card fluid={true}  >
-        <Card.Content extra>
 
-        <span>{this.state.favTotal?<Icon name='play' />:''}  {this.state.favTotal} </span>
-        </Card.Content>
-
-        <List ordered className={'queueShow1'}>
-        {this.state.favs.map( (row1, index1) => (
-
-          <List.Item key={index1}  >
-          <Image className="disable_select" onClick={this.next} data-command="playNext" data-path={row1.file} src={'http://x.me:3031/images?file='+row1.file} avatar={true}  />
-          &nbsp; {row1.Artist} - {row1.Title} <small>{row1.file} </small>
-          </List.Item>
-
-        ))}
-        </List>
-
-      </Card>
 
       <Card fluid={true}  >
         <Card.Content extra>
 
-<Input loading={this.state.loading?true:false} icon='search' fluid inverted placeholder={this.state.searchPlaceholder} ref={(input) => { this.textInput = input; }} onKeyUp={this.searchKeyUp}/>
+<Input loading={this.state.loading?true:false} icon='search' fluid inverted placeholder={'search'} ref={(input) => { this.textInput = input; }} onChange={this.searchKeyUp}/>
+<a onClick={this.state.searchQuery?'':this.getFavs} data-command="next" className="disable_select">
+  <Icon name='list' />
+  {this.state.searchQuery?this.state.searchQuery:'Favorites'} {this.state.loading?loaderIcon:''}
+</a>
 <span>{this.state.storageSearchResultTotal?<Icon name='play' />:''}  {this.state.storageSearchResultTotal} </span>
         </Card.Content>
 
-        <List ordered className={'queueShow1'}>
+        <List bulleted className={''}>
         {this.state.storageSearchResult.map( (row1, index1) => (
 
           <List.Item key={index1}  >
