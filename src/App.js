@@ -389,6 +389,14 @@ changeVol(value){
       status: status,
       // queue: []
     })
+
+    //tosam
+    client.service('storage').patch(null,{ vol: value},{
+      query:{
+      file: this.state.currentsong.file,
+    }}).then((lunrSearchResponse) => {
+    console.log(lunrSearchResponse);
+  })
 }
 handleChange = (e, { value }) => this.changeVol(value)
 
@@ -405,6 +413,7 @@ render() {
     { key: '90', value: '90', text: '90' },
     { key: '100', value: '100', text: '100' },
   ]
+  console.log(this.state.currentsong);
     // console.log(this.state);
     // <Menu
     // size='small'
