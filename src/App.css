@@ -113,3 +113,16 @@ img {
   white-space: nowrap;
   /* background-color: black; */
 }
+.searchCard{
+  /* width:500px; */
+  /* max-width:500px; */
+  max-height: 50vh;
+  min-height: 50vh;
+  height: 50vh;
+  /*margin-left: 10px;*/
+  display: inline-block;
+  overflow-x: hidden;
+  overflow-y: visible;
+  /* white-space: nowrap; */
+  /* background-color: black; */
+}

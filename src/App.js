@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
 import client from './feathers';
-import {Dropdown,Loader,List,Input,Image,Rating,Progress,Card,Form,Container,Label, Modal, Icon,Button,Divider} from 'semantic-ui-react'
+import {Grid,Popup,Dropdown,Loader,List,Input,Image,Rating,Progress,Card,Form,Container,Label, Modal, Icon,Button,Divider} from 'semantic-ui-react'
 import './App.css';
 let vremenska_linija
 let searchLunar
@@ -17,6 +17,7 @@ class App extends Component {
       nextsong: [],
       currentsongStopWords: [],
       currentsong: [],
+      playlists: [],
       watchwords: [],
       page: 0,
       feedUrls: [],
@@ -50,17 +51,22 @@ class App extends Component {
     this.getStatus = this.getStatus.bind(this);
     this.getFavs = this.getFavs.bind(this);
     this.handleChange = this.handleChange.bind(this);
+    this.patchStorage = this.patchStorage.bind(this);
+    this.playlistName = this.playlistName.bind(this);
+    this.newPlaylist = this.newPlaylist.bind(this);
+    this.loadPlaylistName = this.loadPlaylistName.bind(this);
   }
 
-  componentDidMount() {
-Promise.all([client.authenticate()]).then(([auth]) => {
+componentDidMount() {
+    Promise.all([client.authenticate()]).then(([auth]) => {
 
 
 
-  this.getStatus()
+        this.getStatus()
 
 
-      }).catch(error => {console.log(error)})
+
+    }).catch(error => {console.log(error)})
 
       client.on('logout', () => this.logoutClear())
     client.on('authenticated', login => {
@@ -93,7 +99,7 @@ Promise.all([client.authenticate()]).then(([auth]) => {
 
 
     client.service('played').on('created', currentsong => {
-      console.log("currentsong",currentsong);
+      // console.log("currentsong",currentsong);
       client.service('play').find({
         query: {
           command:'status'
@@ -103,19 +109,26 @@ Promise.all([client.authenticate()]).then(([auth]) => {
       });
 
     });
-    client.service('favorite').on('created', favs => {
-      this.getFavs()
+    client.service('playlists').on('created', currentsong => {
+      // console.log("currentsong",currentsong);
+
+         this.getStatus()
+
 
     });
+    // client.service('favorite').on('created', favs => {
+    //   this.getFavs()
+    //
+    // });
 
-    client.service('favorite').on('removed', favs => {
-      this.getFavs()
-
-    });
-    client.service('favorite').on('patched', favs => {
-      this.getFavs()
-
-    });
+    // client.service('favorite').on('removed', favs => {
+    //   this.getFavs()
+    //
+    // });
+    // client.service('favorite').on('patched', favs => {
+    //   this.getFavs()
+    //
+    // });
 
 
   }
@@ -147,17 +160,25 @@ Promise.all([client.authenticate()]).then(([auth]) => {
         this.trackProgress()
         // this.getFavs()
     });
-  }
-  getFavs(){
-    this.setState({loading:true})
-    client.service('favorite').find({
+
+    client.service('playlists').find({
       query: {
-        $limit: 20,
-        $sort: {
-          playCount: -1
-        },
+        $distinct: 'name'
       }
-      }).then((notes) => {
+      }).then((feed) => {
+        console.log(feed);
+        let stateOptions = []
+        // let stateOptions = [ { key: 'AL', value: 'AL', text: 'Alabama' },]
+        for (var i = 0; i < feed.data.length; i++) {
+
+          let a={}
+          a.key=i
+          a.value=feed.data[i]._id
+          a.text= feed.data[i]._id + ' ('+feed.data[i].total+ ')'
+          a.total=feed.data[i].total
+          stateOptions.push(a)
+        }
+        this.setState({playlists:stateOptions})
         // let uniq = []
         // let currentsongData = []
         // for (var i = 0; i < notes.data.length; i++) {
@@ -169,9 +190,25 @@ Promise.all([client.authenticate()]).then(([auth]) => {
         // // let unique = [...new Set(notes.data.map(item => item.word))];
         // this.setState({status:notes.status})
         // this.setState({currentsong:notes.currentsong})
+        // this.setState({nextsong:notes.nextsong})
+        // document.title = notes.currentsong.Title;
+        // this.trackProgress()
+        // // this.getFavs()
+    });
+  }
+  getFavs(){
+    this.setState({loading:true})
+    client.service('favorite').find({
+      query: {
+        $limit: 20,
+        $sort: {
+          playCount: -1
+        },
+      }
+      }).then((notes) => {
         this.setState({storageSearchResult:notes.data,loading:false})
         this.setState({storageSearchResultTotal:notes.total})
-        console.log(notes);
+        // console.log(notes);
         // this.trackProgress()
     });
   }
@@ -208,8 +245,8 @@ Promise.all([client.authenticate()]).then(([auth]) => {
     client.service('play').find({
       query: query
       }).then((notes) => {
-        console.log("notes");
-        console.log(notes);
+        // console.log("notes");
+        // console.log(notes);
         this.getStatus()
         // let uniq = []
         // let currentsongData = []
@@ -240,15 +277,17 @@ rating(event,data){
   if (rating>0) {
     client.service('favorite').create({
       file: this.state.currentsong.file
-      }).then((notes) => {
-        console.log(notes);
-    });
+      })
+    //   .then((notes) => {
+    //     console.log(notes);
+    // });
   }else {
     client.service('favorite').remove(null,{
       query:{file: this.state.currentsong.file}
-      }).then((notes) => {
-        console.log(notes);
-    });
+      })
+    //   .then((notes) => {
+    //     console.log(notes);
+    // });
   }
 
 }
@@ -317,7 +356,18 @@ runMe(searchQuery) {
   })
   console.log("run");
 }
+patchStorage(event,data) {
+  let forKey=data['data-forKey']
 
+  let newValue = event.currentTarget.value;
+  client.service('storage').patch(null,{ [forKey]: newValue},{
+    query:{
+    file: this.state.currentsong.file,
+  }}).then((lunrSearchResponse) => {
+  console.log(lunrSearchResponse);
+})
+  console.log(forKey,newValue);
+}
 searchKeyUp(event) {
 
 
@@ -379,10 +429,11 @@ changeVol(value){
         command:'vol',
         state:value
       }
-      }).then((notes) => {
-        console.log("notes");
-        console.log(notes);
-    });
+      })
+    //   .then((notes) => {
+    //     // console.log("notes");
+    //     // console.log(notes);
+    // });
     let status = this.state.status
     status.volume= value
     this.setState({
@@ -400,10 +451,118 @@ changeVol(value){
 }
 handleChange = (e, { value }) => this.changeVol(value)
 
+// handleDropdownDelay (event,value){
+//   console.log(value);
+//   let id=event.currentTarget.dataset.id;
+//   console.log(id);
+//   // console.log(data['data-id'],data.value);
+//   // client.service('feed').patch(data['data-id'], { delay:data.value })
+//
+// }
+playlistName(event,value){
+  let setMe
+  if (value.value) {
+    setMe = value.value;
+  }else {
+    setMe=value
+  }
+  console.log("playlist name",setMe);
+
+  this.setState({searchTerm:setMe})
+  // console.log(value);
+    if (event.key==='Enter') {
+       this.newPlaylist()
+     }
+}
+loadPlaylistName(event,value){
+  this.setState({loading:true})
+  let setMe
+  if (value.value) {
+    setMe = value.value;
+  }else {
+    setMe=value
+  }
+  console.log("search",setMe);
+  client.service('playlists').find({
+    query: {
+      name:setMe,
+    }
+    })
+    .then((notes) => {
+      let files = []
+      for (var i = 0; i < notes.data.length; i++) {
+        files.push(notes.data[i].file)
+      }
+      console.log(files);
+      // search storage
+      Promise.all([
+        client.service('storage').find({
+          query:{
+            file: {
+              $in: files
+            },
+          $limit: 500,
+          $sort: {
+            updatedAt: -1
+          },
+        }})
+      ]).then(([lunrSearchResponse]) => {
+        this.setState({storageSearchResult:lunrSearchResponse.data,loading:false})
+        this.setState({storageSearchResultTotal:lunrSearchResponse.total})
+        console.log(lunrSearchResponse);
+      })
+      console.log(notes);
+  });
+
+}
+newPlaylist() {
+  let playlistName = this.state.searchTerm
+  console.log("create new playlist",playlistName);
+  client.service('playlists').create({
+    file: this.state.currentsong.file,
+    filekey: this.state.currentsong.file+playlistName,
+    name: playlistName
+    })
+
+  // if (urlapi.parse(feed).hostname) {
+  //   console.log("store new note",feed);
+  //   Promise.all([
+  //     client.service('feed').create({
+  //       feedUrl: feed.trim(),
+  //       tag:'rss',
+  //       delay:30,
+  //     })
+  //   ]).then(([createFeedResponse]) => {
+  //     let stateOptions = this.state.feed
+  //
+  //       let a={}
+  //       a.key=this.state.feed.length+1
+  //       a.value=createFeedResponse._id
+  //       a.text= createFeedResponse.feedName?createFeedResponse.feedName:urlapi.parse(createFeedResponse.feedUrl).hostname
+  //       a.image=createFeedResponse.avatar
+  //       stateOptions.push(a)
+  //
+  //       this.setState({feed:stateOptions})
+  //     // this.setState({feeds:createFeedResponse})
+  //   }).catch(error_1 => {
+  //     console.log(error_1);
+  //   })
+  // }
+
+}
 
 render() {
+  const getThisKeys = ['Artist','Album','Genre','file','Comment','myComment']
+  const getThisKeysIcons = {}
+  getThisKeysIcons.Album = 'folder'
+  getThisKeysIcons.Genre = 'tag'
+  getThisKeysIcons.file = 'file'
+  getThisKeysIcons.Comment = 'tag'
+  getThisKeysIcons.Artist = 'user'
+  getThisKeysIcons.myComment = 'tag'
+  // console.log(getThisKeys1);
   const loaderIcon = <Loader size="mini" active inline/>
-  const stateOptions = [
+  const volumeOptions = [
     { key: '20', value: '30', text: '30' },
     { key: '40', value: '40', text: '40' },
     { key: '50', value: '50', text: '50' },
@@ -413,7 +572,17 @@ render() {
     { key: '90', value: '90', text: '90' },
     { key: '100', value: '100', text: '100' },
   ]
-  console.log(this.state.currentsong);
+  const playlists = [
+    { key: '20', value: '30', text: '30' },
+    { key: '40', value: '40', text: '40' },
+    { key: '50', value: '50', text: '50' },
+    { key: '60', value: '60', text: '60' },
+    { key: '70', value: '70', text: '70' },
+    { key: '80', value: '80', text: '80' },
+    { key: '90', value: '90', text: '90' },
+    { key: '100', value: '100', text: '100' },
+  ]
+  // console.log(this.state.currentsong);
     // console.log(this.state);
     // <Menu
     // size='small'
@@ -485,7 +654,7 @@ render() {
              next
           </a>
           &nbsp;
-          <Dropdown value={this.state.status.volume} onChange={this.handleChange} compact placeholder='Vol' search selection basic options={stateOptions} />
+          <Dropdown value={this.state.status.volume} onChange={this.handleChange} compact placeholder='Vol' search selection basic options={volumeOptions} />
 
           <Divider/>
 
@@ -493,7 +662,7 @@ render() {
         <Progress percent={this.state.curentTrackPercentage}  indicating/>
       </Card>
 
-      <Card fluid={true} className={''} >
+      <Card fluid={true} >
         <Card.Content>
           <Card.Header>
             {this.state.currentsong.Artist}
@@ -502,20 +671,47 @@ render() {
             <span className='date'>
             <Icon name='time' />   {Math.round(this.state.currentsong.Time/60)} min.
             </span>
+
             <Image style={{borderRadius:'10px'}} src={'http://x.me:3031/images?file='+this.state.currentsong.file} size='medium' floated={'right'}  />
           </Card.Meta>
           <Card.Description>
-          {this.state.currentsong.Title} <Rating rating={this.state.currentsong.favorite} onRate={this.rating}/>
+          {this.state.currentsong.Title} <Rating rating={this.state.currentsong.favorite} onRate={this.rating}/> {this.state.loading?loaderIcon:''}
+            <Divider/>
+
+
+
+          <Dropdown
+            onSearchChange={this.playlistName}
+            onChange={this.playlistName}
+            data-id={0}
+            placeholder='playlist'
+            selection
+            search
+            options={this.state.playlists}
+            noResultsMessage={<Label onClick={this.newPlaylist} color="grey" circular size="medium"> <Icon name='save' /> Save </Label>}/>
           <Divider/>
-        <Label><Icon name='user' /> {this.state.currentsong.Artist}</Label>
-        <p/>
-        <Label><Icon name='folder' /> {this.state.currentsong.Album}</Label>
-        <p/>
-        <Label><Icon name='tag' /> {this.state.currentsong.Genre}</Label>
-        <p/>
-        <Label><Icon name='file' /> {this.state.currentsong.file}</Label>
-        <p/>
-        <Label><Icon name='tag' /> {this.state.currentsong.Comment}</Label>
+
+
+
+        {getThisKeys.map( (row1, index1) => (
+        <div key={index1}>  <Label > <Icon name={getThisKeysIcons[row1]} />  {row1}: {this.state.currentsong[row1]} </Label>
+        <Popup wide trigger={<Icon name='edit' />} on='click' >
+        <Grid divided columns='equal'>
+          <Grid.Column>
+            <Popup
+
+              trigger={<Input data-forKey={row1} onChange={this.patchStorage} placeholder={this.state.currentsong[row1]} />}
+              content={'Edit '+row1}
+              position='top center'
+
+              size='tiny'
+            />
+          </Grid.Column>
+        </Grid>
+      </Popup>
+        </div>
+          ))}
+
           </Card.Description>
         </Card.Content>
         <Card.Content extra>
@@ -542,12 +738,22 @@ render() {
 <Input loading={this.state.loading?true:false} icon='search' fluid inverted placeholder={'search'} ref={(input) => { this.textInput = input; }} onChange={this.searchKeyUp}/>
 <a onClick={this.state.searchQuery?'':this.getFavs} data-command="next" className="disable_select">
   <Icon name='list' />
-  {this.state.searchQuery?this.state.searchQuery:'Favorites'} {this.state.loading?loaderIcon:''}
+  {this.state.searchQuery?this.state.searchQuery:'Favorites'} |
 </a>
-<span>{this.state.storageSearchResultTotal?<Icon name='play' />:''}  {this.state.storageSearchResultTotal} </span>
+<Icon name='list' />
+<Dropdown
+  onSearchChange={this.playlistName}
+  onChange={this.loadPlaylistName}
+  placeholder='playlists'
+  selection
+  search
+  options={this.state.playlists}
+  noResultsMessage={<Label onClick={this.newPlaylist} color="grey" circular size="medium"> <Icon name='save' /> Save </Label>}/>
+<Divider/>
+<span>{this.state.storageSearchResultTotal?<Icon name='play' />:''}  {this.state.storageSearchResultTotal} {this.state.loading?loaderIcon:''}</span>
         </Card.Content>
 
-        <List bulleted className={''}>
+        <List bulleted className={'searchCard'}>
         {this.state.storageSearchResult.map( (row1, index1) => (
 
           <List.Item key={index1}  >
@@ -557,7 +763,7 @@ render() {
 
         ))}
         </List>
-
+<p>&nbsp;</p>
       </Card>
 
 
